@@ -1,7 +1,7 @@
-PX2SX - A PIX to Junos configuration conversion tool
+asa2srx - A asa to Junos configuration conversion tool
 ====================================================
 
-PX2SX is a conversion utility that takes a PIX or ASA configuration file as input,
+asa2srx is a conversion utility that takes a PIX or ASA configuration file as input,
 and produces a set of output files containing the equivalent Junos configurations
 for the SRX platform.
 
@@ -82,6 +82,7 @@ and the results pasted into Word documents. The CSV files are;
 		rule-tables.csv:	The security policies
 		nat-tables.csv:		The NAT policies
 		route-tables.csv:	The static routes
+        compare.csv:        The compare file for human handle
 
 -g: Write the address objects and address-sets to the global address-book instead of
 the zone-based address books. This is useful when you have groups that contain members
