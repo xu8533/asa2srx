@@ -64,7 +64,7 @@ foreach $line (@all) {
 	@acl = split(" ", $line);
 	chomp($acl[2]);
 	chomp($acl[3]) if ($#acl > 2);
-	given ($acl[0]) {
+	given($acl[0]) {
 		when ("object") {
 			$objname=$acl[2] if ($acl[1] eq "network");
 		}
@@ -285,6 +285,19 @@ foreach $line (@all) {
 				writeaddress($name, $hostname, $ip);
 			}
 		}
+		when ("range") {
+			if (!exists $iplist{$acl[1]}) {
+				$ip=$acl[1];
+                $hostname = $objname;
+ 				($ip, $name)=rangeaddressbook($ip, @zones);
+ 			} else { $hostname=$objname; $name=$zonelist{$hostname}; }
+			if (!exists $zonelist{$hostname}) {
+                $ip1=$acl[1];
+                $ip2=$acl[2];
+				$zonelist{$hostname}=$name;
+				writerangeaddress($name, $hostname, $ip1, $ip2);
+			}
+		}
 		when ("object-group") {
 			given ($acl[1]) {
 				when ("network") {
@@ -311,7 +324,11 @@ foreach $line (@all) {
 			}
 		}
 		when ("network-object") {
-			if ($acl[1] eq "host") { $j=2; $mask="255.255.255.255"; } else { $j=1; $mask=$acl[2]; }
+			if ($acl[1] eq "host") { $j=2; $mask="255.255.255.255"; } 
+            elsif ($acl[1] eq "object") {
+                $hostname = $acl[2]
+            }
+            else { $j=1; $mask=$acl[2]; }
 			if (!exists $iplist{$acl[$j]}) {
 				$ip=NetAddr::IP->new($acl[$j], $mask);
  				($ip, $name, $hostname)=addressbook($ip, "ip", @zones, @namelist, @natlist);
@@ -503,9 +520,7 @@ if (defined $options{c}) {
 
 sub findzone {
 	my ($ip, @zones)=@_;
-#	my $name, $network, $net, $netmask;
 	my $zone, $name, $network;
-	
 	foreach $zone (@zones) {
 		($name, $network) = split /,/, $zone;
 		if ($ip->within(new NetAddr::IP($network))) { last; }
@@ -519,19 +534,19 @@ sub setaddress {
 	my @icmp=("echo","echo-reply","traceroute","unreachable","time-exceeded","source-quench","redirect");
 
 	given ($acl[$i]) {
-		when (\%iplist)				{ $data=$acl[$i++]; }
-		when ("object-group")	{ $data=$acl[++$i]; }
-		when ("host")					{ if (exists $iplist{$acl[++$i]}) { $data=$acl[$i]; } else { $data=new NetAddr::IP($acl[$i]); } }
-		when ("eq")						{ $data=$acl[++$i]; }
-		when ("gt")						{ if (looks_like_number($t1=$acl[++$i])) { $p1=$t1; } else { $p1=$svcports{$t1} };
-														$data=$p1 . "-65535"; }
-#		when ("range")				{ $data=$acl[++$i] . "-" . $acl[++$i]; }
-		when ("range")				{ if (looks_like_number($t1=$acl[++$i])) { $p1=$t1; } else { $p1=$svcports{$t1} };
-														if (looks_like_number($t2=$acl[++$i])) { $p2=$t2; } else { $p2=$svcports{$t2} };
-														$data=$p1 . "-" . $p2; }
-		when ("any")					{ $data=$acl[$i]; }
-		when (\@icmp)					{ $data=$acl[$i]; }
-		default								{ $data=new NetAddr::IP($acl[$i++], $acl[$i]); }
+		when (\%iplist) { $data=$acl[$i++]; }
+		when ("object-group")   { $data=$acl[++$i]; }
+		when ("host")   { if (exists $iplist{$acl[++$i]}) { $data=$acl[$i]; } else { $data=new NetAddr::IP($acl[$i]); } }
+		when ("eq")	{ $data=$acl[++$i]; }
+		when ("gt") { if (looks_like_number($t1=$acl[++$i])) { $p1=$t1; } else { $p1=$svcports{$t1} };
+			$data=$p1 . "-65535"; }
+		when ("range")  { 
+            if (looks_like_number($t1=$acl[++$i])) { $p1=$t1; } else { $p1=$svcports{$t1} };
+		    if (looks_like_number($t2=$acl[++$i])) { $p2=$t2; } else { $p2=$svcports{$t2} };
+		    $data=$p1 . "-" . $p2; }
+		when ("any")    { $data=$acl[$i]; }
+		when (\@icmp)   { $data=$acl[$i]; }
+		default	{ $data=new NetAddr::IP($acl[$i++], $acl[$i]); }
 	}
 	return(++$i, $data);
 }
@@ -548,6 +563,13 @@ sub addressbook {
 	return($ip, $zone, $hostname);
 }
 
+sub rangeaddressbook {
+	my ($ip, @zones)=@_;
+	$ip=new NetAddr::IP($ip);
+	my $zone=findzone($ip, @zones);
+	return($ip, $zone);
+}
+
 sub writeaddress {
 	my ($zone, $hostname, $ip)=@_;
 
@@ -560,3 +582,17 @@ sub writeaddress {
 	}
 	print otables "$hostname,$ip\n" if defined $options{c};
 }
+
+sub writerangeaddress {
+	my ($zone, $hostname, $start_ip, $end_ip)=@_;
+
+	if (!defined $options{j}) {
+		print objs "set security zones security-zone $zone address-book address $hostname range-address $start_ip to $end_ip\n" if !defined $options{g};
+		print objs "set security address-book global address $hostname range-address $start_ip to $end_ip\n" if defined $options{g};
+	} else {
+		print objs "\t\tsecurity-zone $zone {\n\t\t\t\t\taddress-book {\n\t\t\t\t\t\taddress $hostname $ip;\n\t\t\t\t\t}\n\t\t}\n" if !defined $options{g};
+		print objs "\t\t\taddress $hostname $ip;\n" if defined $options{g};					
+	}
+	print otables "$hostname,$start_ip to $end_ip\n" if defined $options{c};
+}
+
