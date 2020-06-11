@@ -8,6 +8,14 @@
 # Telecom New Zealand Limited (including its subsidiaries, affiliates, employees, directors, officers, agents
 # or subcontractors) expressly disclaims all warranties of any kind related to the script, either expressed
 # or implied, and all liability for any loss or damage associated with use of the script.
+=pod
+%zonelist
+%iplist
+array @all save all asa configuration 
+array @acl each asa configuration line
+array @svcs save all services.csv 
+
+=cut
 
 use 5.012;
 no strict;
@@ -325,8 +333,22 @@ foreach $line (@all) {
 		}
 		when ("network-object") {
 			if ($acl[1] eq "host") { $j=2; $mask="255.255.255.255"; } 
+            # address-set sub item of defined addressbook
             elsif ($acl[1] eq "object") {
-                $hostname = $acl[2]
+                $hostname = $acl[2];
+                $name = $zonelist{$hostname};
+			    if (!defined $options{j}) {
+			    	print agroups "set security zones security-zone $name address-book address-set $grp address $hostname\n" if !defined $options{g};
+			    	print agroups "set security address-book global address-set $grp address $hostname\n" if defined $options{g};
+			    } else {
+			    	print agroups "\t\t\t\t\t\t\taddress $hostname;\n" if !defined $options{g};
+			    	print agroups "\t\t\t\taddress $hostname;\n" if defined $options{g};
+			    }
+	 		    print gtables "$grp,$hostname\n" if defined $options{c};
+                #fix object-group name and zone mapping of just one item
+			    if (!exists $zonelist{$grp}) { $zonelist{$grp}=$name; }
+			    elsif ($zonelist{$grp} ne $name) { print STDERR "Group $grp overlaps Zones $zonelist{$grp} and $name\n"; }
+                next;
             }
             else { $j=1; $mask=$acl[2]; }
 			if (!exists $iplist{$acl[$j]}) {
@@ -383,7 +405,7 @@ foreach $line (@all) {
 			if ($acl[2] eq "remark") { next; }
 			if (!exists $inacl{$acl[1]} && !exists $outacl{$acl[1]}) { next; }
 			if ($acl[2] eq "extended") {
-				$j=4;
+				$j=4; #protocol key or element key
 				if ($acl[$j] eq "object-group") { ($i, $newsvc)=setaddress($j, @acl); } else { $i=5; }
 			} else {$i=4;$j=3;}
 			($i, $srcip)=setaddress($i, @acl);
@@ -393,8 +415,8 @@ foreach $line (@all) {
 			if ($next ne "" && $next ne "log" ) {
 				($i, $port)=setaddress($i, @acl);
 				if (exists $service{$acl[$j]}{$port}) { $newsvc=$service{$acl[$j]}{$port}; }
-					elsif (exists $newapp{$acl[$j]}{$port}) { $newsvc=$newapp{$acl[$j]}{$port}; }
-					elsif (exists $group{$port}) { $newsvc=$port; }
+				elsif (exists $newapp{$acl[$j]}{$port}) { $newsvc=$newapp{$acl[$j]}{$port}; }
+				elsif (exists $group{$port}) { $newsvc=$port; }
 			}	else {
 				given ($acl[$j]) {
 					when ("tcp") { $newsvc="junos-tcp-any"; }
@@ -536,6 +558,8 @@ sub setaddress {
 	given ($acl[$i]) {
 		when (\%iplist) { $data=$acl[$i++]; }
 		when ("object-group")   { $data=$acl[++$i]; }
+        #add item to handle object term
+		when ("object")   { $data=$acl[++$i]; }
 		when ("host")   { if (exists $iplist{$acl[++$i]}) { $data=$acl[$i]; } else { $data=new NetAddr::IP($acl[$i]); } }
 		when ("eq")	{ $data=$acl[++$i]; }
 		when ("gt") { if (looks_like_number($t1=$acl[++$i])) { $p1=$t1; } else { $p1=$svcports{$t1} };
