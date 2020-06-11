@@ -1,0 +1,57 @@
+applications {
+    application snmp-poll {
+        protocol udp;
+        destination-port 161;
+    }
+    application snmp-trap {
+        protocol udp;
+        destination-port 162;
+    }
+    application icmp-reply {
+        term t1 protocol icmp icmp-type echo-reply;
+    }
+    application icmp-traceroute {
+        term t1 protocol icmp icmp-type time-exceeded;
+    }
+    application icmp-unreachable {
+        term t1 protocol icmp icmp-type unreachable;
+    }
+    application icmp-time-exceeded {
+        term t1 protocol icmp icmp-type time-exceeded;
+    }
+    application icmp-source-quench {
+        term t1 protocol icmp icmp-type source-quench;
+    }
+    application ldaps {
+        protocol tcp;
+        destination-port 636;
+    }
+    application kerberos {
+        term t2 protocol tcp destination-port 750;
+        term t1 protocol udp destination-port 750;
+    }
+    application lotus {
+        protocol tcp;
+        destination-port 1352;
+    }
+    application dnsix {
+        protocol udp;
+        destination-port 195;
+    }
+    application radius {
+        protocol udp;
+        destination-port 1645;
+    }
+    application radius-acct {
+        protocol udp;
+        destination-port 1646;
+    }
+    application pc-anywhere {
+        term t2 protocol tcp destination-port 5631;
+        term t1 protocol udp destination-port 5632;
+    }
+    application dns-both {
+        term t1 alg dns protocol udp destination-port 53;
+        term t2 alg dns protocol tcp destination-port 53;
+    }
+}
