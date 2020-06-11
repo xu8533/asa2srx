@@ -69,6 +69,7 @@ if (defined $options{j}) {
 	print nats "security {\n\tnat {\n\t\tsource {\n";
 }
 $set=$rule=1;
+$object_group;
 print "Zones & Routes...\n";
 foreach $line (@all) {
     chomp $line;
@@ -287,7 +288,11 @@ foreach $line (@all) {
 	chomp($acl[3]);
 	given ($acl[0]) {
 		when ("object") {
-			$objname=$acl[2] if ($acl[1] eq "network");
+			if ($acl[1] eq "network") {
+                $objname=$acl[2];
+                $object_group = $line;
+                print compare $object_group . "\n";
+            }
 		}
 		when ($_ eq "name" || $_ eq "subnet" || $_ eq "host") {
 			if ($_ eq "name") { $ip=$iplist{$acl[2]}; } else { $ip=$iplist{$objname}; }
@@ -314,6 +319,8 @@ foreach $line (@all) {
 			given ($acl[1]) {
 				when ("network") {
 					$grp = $acl[2];
+                    $object_group = $line;
+                    print compare $object_group . "\n";
 					if (defined $options{j}) {
 						if (defined $netgroups) {
 							print agroups "\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t}\n" if !defined $options{g};
@@ -327,6 +334,8 @@ foreach $line (@all) {
 				when ("service") {
 					$grp = $acl[2];
 					$protocol = $acl[3]; $group{$grp}=1;
+                    $object_group = $line;
+                    print compare $object_group . "\n";
 					if (defined $options{j}) {
 						if (defined $svcgroups) { print pgroups "\t}\n"; }
 						print pgroups "\tapplication-set $grp {\n";
