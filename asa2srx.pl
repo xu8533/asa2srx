@@ -25,6 +25,7 @@ use Scalar::Util qw(looks_like_number);
 use NetAddr::IP;
 use Cwd 'abs_path';
 use File::Basename;
+use Data::Dumper;
 
 $my_path = dirname(abs_path($0));
 
@@ -390,31 +391,30 @@ foreach $line (@all) {
 		when ($_ eq "port-object" || $_ eq "service-object") {
 			if ($_ eq "service-object") { $protocol=$acl[1]; $i=2; $j=3; }
 			else { $i=1; $j=2; }
-			if (exists $service{$protocol}{$acl[$j]}) { $svcname=$service{$protocol}{$acl[$j]}; }
-				else {
-					($i, $dstport)=setaddress($i, @acl);
-					if (!looks_like_number($dstport) && index($dstport, "-")<0) { $dstport=$svcports{$dstport}; }		# Fix idiocy in port/range naming
-					given ($protocol) {
-						when ("udp") { $svcname="UDP_" . $dstport; }
-						when ("tcp") { $svcname="TCP_" . $dstport; }
-						when ("tcp-udp") { $svcname="TCP_UDP_" . $dstport; }
-					}
-					if (!exists $newapp{$protocol}{$acl[$j]}) {
-						$newapp{$protocol}{$acl[$j]}=$svcname;
-						if ($protocol eq "tcp-udp") {
-							print ports "set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if !defined $options{j};
-							print compare $line . ",set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
-							print ports "set applications application $svcname term t2 protocol udp destination-port $dstport\n" if !defined $options{j};
-							print compare $line . ",set applications application $svcname term t2 protocol udp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
-							print ports "\tapplication $svcname {\n\t\tterm t1 protocol tcp destination-port $dstport;\n" if defined $options{j};
-							print ports "\t\tterm t2 protocol udp destination-port $dstport;\n\t}\n" if defined $options{j};
-						} else {
-							print ports "set applications application $svcname protocol $protocol destination-port $dstport\n" if !defined $options{j};
-							print compare $line . ",set applications application $svcname protocol $protocol destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
-							print ports "\tapplication $svcname {\n\t\tprotocol $protocol;\n\t\tdestination-port $dstport;\n\t}\n" if defined $options{j};
-						}
-					}
+			if (exists $service{$protocol}{$acl[$j]}) { $svcname=$service{$protocol}{$acl[$j]}; } else {
+		        ($i, $dstport)=setaddress($i, @acl);
+			    if (!looks_like_number($dstport) && index($dstport, "-")<0) { $dstport=$svcports{$dstport}; }		# Fix idiocy in port/range naming
+			    given ($protocol) {
+			    	when ("udp") { $svcname="UDP_" . $dstport; }
+			        when ("tcp") { $svcname="TCP_" . $dstport; }
+				    when ("tcp-udp") { $svcname="TCP_UDP_" . $dstport; }
 				}
+			    if (!exists $newapp{$protocol}{$acl[$j]}) {
+			        $newapp{$protocol}{$acl[$j]}=$svcname;
+				    if ($protocol eq "tcp-udp") {
+					    print ports "set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if !defined $options{j};
+					    print compare $line . ",set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
+					    print ports "set applications application $svcname term t2 protocol udp destination-port $dstport\n" if !defined $options{j};
+					    print compare $line . ",set applications application $svcname term t2 protocol udp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
+					    print ports "\tapplication $svcname {\n\t\tterm t1 protocol tcp destination-port $dstport;\n" if defined $options{j};
+				        print ports "\t\tterm t2 protocol udp destination-port $dstport;\n\t}\n" if defined $options{j};
+				    } else {
+					    print ports "set applications application $svcname protocol $protocol destination-port $dstport\n" if !defined $options{j};
+					    print compare $line . ",set applications application $svcname protocol $protocol destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
+					    print ports "\tapplication $svcname {\n\t\tprotocol $protocol;\n\t\tdestination-port $dstport;\n\t}\n" if defined $options{j};
+			        }
+			    }
+		    }
 			print stables "$grp,$svcname\n" if defined $options{c};
 			print pgroups "set applications application-set $grp application $svcname\n" if !defined $options{j};
 			print compare $line . ",set applications application-set $grp application $svcname\n" if (!defined $options{j} && defined $options{c});
@@ -451,14 +451,15 @@ foreach $line (@all) {
 				}
 			}
 			if ($newsvc eq "") {
-				if ($acl[$j] eq "icmp" || $acl[$j] eq "ip") { print STDERR "ACL not handled - policy #$policy application $acl[$j]\n$line\n"; }
-					else {
-						if ($acl[$j] eq "udp") { $newsvc="UDP_" . $port; } else {$newsvc="TCP_Port_" . $port; }
-						$newapp{$acl[$j]}{$port}=$newsvc;
-						print ports "set applications application $newsvc protocol $acl[$j] destination-port $port\n" if !defined $options{j};
-						print compare $line . ",set applications application $newsvc protocol $acl[$j] destination-port $port\n" if (!defined $options{j} && defined $options{c});
-						print ports "\tapplication $newsvc {\n\t\tprotocol $acl[$j];\n\t\tdestination-port $port;\n\t}\n" if defined $options{j};
-					}
+				if ($acl[$j] eq "icmp" || $acl[$j] eq "ip") { print STDERR "ACL not handled - policy #$policy application $acl[$j]\n$line\n"; } 
+                else {
+				    if ($acl[$j] eq "udp") { $newsvc="UDP_" . $port; } 
+                    else {$newsvc="TCP_Port_" . $port; }
+				    $newapp{$acl[$j]}{$port}=$newsvc;
+				    print ports "set applications application $newsvc protocol $acl[$j] destination-port $port\n" if !defined $options{j};
+				    print compare $line . ",set applications application $newsvc protocol $acl[$j] destination-port $port\n" if (!defined $options{j} && defined $options{c});
+			        print ports "\tapplication $newsvc {\n\t\tprotocol $acl[$j];\n\t\tdestination-port $port;\n\t}\n" if defined $options{j};
+		        }
 			}
 			if (exists $zonelist{$srcip}) {
 				if ($srcip eq "any" && exists $inacl{$acl[1]} && !defined $options{z}) { $fzone=$inacl{$acl[1]}; }
@@ -486,10 +487,22 @@ foreach $line (@all) {
 			$fixed=0;
             # policy merge
 			if (!defined $options{n}) {
+                print "\n\nstart\n";
+                print "rb src is \n";
+                #print Dumper(\%rbsrc);
+                print "rb dst is \n";
+                #print Dumper(\%rbdst);
 				foreach $rb (@{$rbsrc{$srcip}}) {
+                    print "enter 1\n";
+                    print $line . "\n";
 					if ($fixed) { last; }
 					if ($rb->{FZONE} eq $fzone && $rb->{TZONE} eq $tozone) {
+                        print "enter 2\n";
+                        print "newsvc is $newsvc\n";
+                        print "srcip is $srcip\tdstip is $dstip\taction is $action\n";
+                        print "rb->{SRC} is $rb->{SRC}\trb->{DST} is $rb->{DST}\trb->{ACT} is $rb->{ACT}\n";
 						if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $newsvc ne "any") {
+                            print "enter src\n";
 							print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if !defined $options{j};
 							print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
 							print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tapplication $newsvc;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
@@ -497,6 +510,7 @@ foreach $line (@all) {
 							$fixed=1;
 							$total++;
 						} elsif (!defined $options{s} && $rb->{SRC} eq $srcip && $rb->{SVC} eq $newsvc && $rb->{ACT} eq $action) {
+                            print "enter 3\n";
 							print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if !defined $options{j};
 							print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if (!defined $options{j} && defined $options{c});
 							print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tdestination-address $dstip;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
@@ -507,10 +521,14 @@ foreach $line (@all) {
 					}
 				}
 				if (!$fixed) {
-					foreach $rb (@{$rbdest{$dstip}}) {
-						if ($fixed) { last; }
+                    print "enter 4\n";
+					foreach $rb (@{$rbdst{$dstip}}) {
+                        print "enter foreach\n";
+                        if ($fixed) { last; }
 						if ($rb->{FZONE} eq $fzone && $rb->{TZONE} eq $tozone) {
-							if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $newsvc ne "any") {
+                            print "enter fzone\n";
+							if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $newsvc ne "any" && $newsvc ne $rb->{SVC}) {
+                                print "enter 6\n";
 								print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if !defined $options{j};
 								print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
 								print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tapplication $newsvc;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
@@ -518,6 +536,7 @@ foreach $line (@all) {
 								$fixed=1;
 								$total++;						
 							} elsif (!defined $options{s} && $rb->{DST} eq $dstip && $rb->{SVC} eq $newsvc && $rb->{ACT} eq $action) {
+                                print "enter 7\n";
 								print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match source-address $srcip\n" if !defined $options{j};
 								print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match source-address $srcip\n" if (!defined $options{j} && defined $options{c});
 								print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tsource-address $srcip;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
@@ -530,6 +549,7 @@ foreach $line (@all) {
 				}
 			}
 			if (!$fixed) {
+                print "enter 5\n";
 				print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$policy match source-address $srcip destination-address $dstip application $newsvc\n" if !defined $options{j};
 				print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$policy match source-address $srcip destination-address $dstip application $newsvc\n" if ( !defined $options{j} && defined $options{c});
 				print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$policy then $action\n" if !defined $options{j};
@@ -544,6 +564,7 @@ foreach $line (@all) {
 				$rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$policy++, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
 				push (@{$rbsrc{$rule->{SRC}}}, $rule);
 				push (@{$rbdst{$rule->{DST}}}, $rule);
+                print "end\n";
 			}
 		}
 	}
