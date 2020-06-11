@@ -131,7 +131,9 @@ foreach $line (@all) {
 		}
 		when ("nat") {
 			$acl[1] =~ /\((.*)\)/;
+            print "$acl[1]\n";
 			$from=$1;
+            print "from is $from\n";
 			foreach $global (@globals) {
 				($to, $num)=split /,/, $global;
 				if ($num eq $acl[2] && $from ne $to) {
@@ -393,9 +395,9 @@ foreach $line (@all) {
 					($i, $dstport)=setaddress($i, @acl);
 					if (!looks_like_number($dstport) && index($dstport, "-")<0) { $dstport=$svcports{$dstport}; }		# Fix idiocy in port/range naming
 					given ($protocol) {
-						when ("udp") { $svcname="UDP_Port_" . $dstport; }
-						when ("tcp") { $svcname="TCP_Port_" . $dstport; }
-						when ("tcp-udp") { $svcname="TCP_UDP_Port_" . $dstport; }
+						when ("udp") { $svcname="UDP_" . $dstport; }
+						when ("tcp") { $svcname="TCP_" . $dstport; }
+						when ("tcp-udp") { $svcname="TCP_UDP_" . $dstport; }
 					}
 					if (!exists $newapp{$protocol}{$acl[$j]}) {
 						$newapp{$protocol}{$acl[$j]}=$svcname;
@@ -451,7 +453,7 @@ foreach $line (@all) {
 			if ($newsvc eq "") {
 				if ($acl[$j] eq "icmp" || $acl[$j] eq "ip") { print STDERR "ACL not handled - policy #$policy application $acl[$j]\n$line\n"; }
 					else {
-						if ($acl[$j] eq "udp") { $newsvc="UDP_Port_" . $port; } else {$newsvc="TCP_Port_" . $port; }
+						if ($acl[$j] eq "udp") { $newsvc="UDP_" . $port; } else {$newsvc="TCP_Port_" . $port; }
 						$newapp{$acl[$j]}{$port}=$newsvc;
 						print ports "set applications application $newsvc protocol $acl[$j] destination-port $port\n" if !defined $options{j};
 						print compare $line . ",set applications application $newsvc protocol $acl[$j] destination-port $port\n" if (!defined $options{j} && defined $options{c});
@@ -482,6 +484,7 @@ foreach $line (@all) {
 			}
 			$action=$acl[$j-1];
 			$fixed=0;
+            # policy merge
 			if (!defined $options{n}) {
 				foreach $rb (@{$rbsrc{$srcip}}) {
 					if ($fixed) { last; }
