@@ -1,19 +1,27 @@
 #!/usr/bin/perl
-# px2sx.pl, version 2.58, 10th July 2012, (c) Telecom NZ Ltd
+# asa2sx.pl, version 3.0, 11th June 2020
 # Originally created by David Hunter <david.hunter@gen-i.co.nz>
-# Distributed under the Artistic License 2.0
+# modify by Jeroen Simonetti, last modify by xujian 838178533@qq.com
 # NetAddr::IP module is (c) Luis E. Muñoz 1999-2007 and (c) Michael Robinton 2006-2010
 
 # This script is provided on an "as is" and "as available" basis and your use of it is at your sole risk.
 # Telecom New Zealand Limited (including its subsidiaries, affiliates, employees, directors, officers, agents
 # or subcontractors) expressly disclaims all warranties of any kind related to the script, either expressed
 # or implied, and all liability for any loss or damage associated with use of the script.
+
 =pod
-%zonelist
-%iplist
+
+%zonelist, addressbook and zone pairs
+ie.
+%zonelist = { host_10.0.0.1 => trust, net_172.16.0.0/24 => untrust }
+%iplist, hostname and real ip address pairs
+ie.
+%iplist = { host_10.0.0.1 => 10.0.0.1, net_172.16.0.0/24 => 172.16.0.0/24 }
 array @all save all asa configuration 
 array @acl each asa configuration line
-array @svcs save all services.csv 
+array @svcs save all services.csv , predefined asa and srx application pairs
+variable fixed, 1 == policy merged, 0 == no policy merged
+hash %rbsrc and %rbdst storge all policies elements, used by policy merge
 
 =cut
 
@@ -117,7 +125,7 @@ foreach $line (@all) {
 			if (exists $iplist{$acl[2]}) { $route=new NetAddr::IP($iplist{$acl[2]}->addr, $acl[3]); } else { ($i,$route)=setaddress(2, @acl); }
 			if (exists $iplist{$acl[4]}) { $nexthop=$iplist{$acl[4]}->addr; } else { $nexthop=$acl[4]; }
 			print sroutes "set routing-options static route ". $route->network . " next-hop $nexthop\n" if !defined $options{j};
-            print compare $line . ",set routing-options static route" . $route->network . " next-hop $nexthop\n" if (!defined $options{j} && defined $options{c});
+            print compare "," . $line . ",,set routing-options static route" . $route->network . " next-hop $nexthop\n" if (!defined $options{j} && defined $options{c});
 			print sroutes "\t\troute ". $route->network . " next-hop $nexthop;\n" if defined $options{j};
 			print ttables $route->addr . "," . $route->mask . ",$nexthop\n" if defined $options{c};
 			push @newzones, "$acl[1]," . $route->network . "\n";
@@ -294,7 +302,7 @@ foreach $line (@all) {
 			if ($acl[1] eq "network") {
                 $objname=$acl[2];
                 $object_group = $line;
-                print compare $object_group . "\n";
+                print compare ",,," . $object_group . "\n";
             }
 		}
 		when ($_ eq "name" || $_ eq "subnet" || $_ eq "host") {
@@ -323,7 +331,7 @@ foreach $line (@all) {
 				when ("network") {
 					$grp = $acl[2];
                     $object_group = $line;
-                    print compare $object_group . "\n";
+                    print compare ",,," . $object_group . "\n";
 					if (defined $options{j}) {
 						if (defined $netgroups) {
 							print agroups "\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t}\n" if !defined $options{g};
@@ -338,7 +346,7 @@ foreach $line (@all) {
 					$grp = $acl[2];
 					$protocol = $acl[3]; $group{$grp}=1;
                     $object_group = $line;
-                    print compare $object_group . "\n";
+                    print compare ",,," . $object_group . "\n";
 					if (defined $options{j}) {
 						if (defined $svcgroups) { print pgroups "\t}\n"; }
 						print pgroups "\tapplication-set $grp {\n";
@@ -360,7 +368,7 @@ foreach $line (@all) {
 			    	print agroups "\t\t\t\t\t\t\taddress $hostname;\n" if !defined $options{g};
 			    	print agroups "\t\t\t\taddress $hostname;\n" if defined $options{g};
 			    }
-			    print compare $line . ",set security zones security-zone $name address-book address-set $grp address $hostname\n" if defined $options{c};
+			    print compare "," . $line . ",,set security zones security-zone $name address-book address-set $grp address $hostname\n" if defined $options{c};
 	 		    print gtables "$grp,$hostname\n" if defined $options{c};
                 #fix object-group name and zone mapping of just one item
 			    if (!exists $zonelist{$grp}) { $zonelist{$grp}=$name; }
@@ -385,7 +393,7 @@ foreach $line (@all) {
 				print agroups "\t\t\t\t\t\t\taddress $hostname;\n" if !defined $options{g};
 				print agroups "\t\t\t\taddress $hostname;\n" if defined $options{g};
 			}
-			print compare $line . ",set security zones security-zone $name address-book address-set $grp address $hostname\n" if defined $options{c};
+			print compare "," . $line . ",,set security zones security-zone $name address-book address-set $grp address $hostname\n" if defined $options{c};
 	 		print gtables "$grp,$hostname\n" if defined $options{c};
 		}
 		when ($_ eq "port-object" || $_ eq "service-object") {
@@ -403,21 +411,21 @@ foreach $line (@all) {
 			        $newapp{$protocol}{$acl[$j]}=$svcname;
 				    if ($protocol eq "tcp-udp") {
 					    print ports "set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if !defined $options{j};
-					    print compare $line . ",set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
+					    print compare "," . $line . ",,set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
 					    print ports "set applications application $svcname term t2 protocol udp destination-port $dstport\n" if !defined $options{j};
-					    print compare $line . ",set applications application $svcname term t2 protocol udp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
+					    print compare "," . $line . ",,set applications application $svcname term t2 protocol udp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
 					    print ports "\tapplication $svcname {\n\t\tterm t1 protocol tcp destination-port $dstport;\n" if defined $options{j};
 				        print ports "\t\tterm t2 protocol udp destination-port $dstport;\n\t}\n" if defined $options{j};
 				    } else {
 					    print ports "set applications application $svcname protocol $protocol destination-port $dstport\n" if !defined $options{j};
-					    print compare $line . ",set applications application $svcname protocol $protocol destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
+					    print compare "," . $line . ",,set applications application $svcname protocol $protocol destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
 					    print ports "\tapplication $svcname {\n\t\tprotocol $protocol;\n\t\tdestination-port $dstport;\n\t}\n" if defined $options{j};
 			        }
 			    }
 		    }
 			print stables "$grp,$svcname\n" if defined $options{c};
 			print pgroups "set applications application-set $grp application $svcname\n" if !defined $options{j};
-			print compare $line . ",set applications application-set $grp application $svcname\n" if (!defined $options{j} && defined $options{c});
+			print compare "," . $line . ",,set applications application-set $grp application $svcname\n" if (!defined $options{j} && defined $options{c});
 			print pgroups "\t\tapplication $svcname;\n" if defined $options{j};
 		}
 		when ("access-list") {
@@ -457,7 +465,7 @@ foreach $line (@all) {
                     else {$newsvc="TCP_Port_" . $port; }
 				    $newapp{$acl[$j]}{$port}=$newsvc;
 				    print ports "set applications application $newsvc protocol $acl[$j] destination-port $port\n" if !defined $options{j};
-				    print compare $line . ",set applications application $newsvc protocol $acl[$j] destination-port $port\n" if (!defined $options{j} && defined $options{c});
+				    print compare "," . $line . ",,set applications application $newsvc protocol $acl[$j] destination-port $port\n" if (!defined $options{j} && defined $options{c});
 			        print ports "\tapplication $newsvc {\n\t\tprotocol $acl[$j];\n\t\tdestination-port $port;\n\t}\n" if defined $options{j};
 		        }
 			}
@@ -487,85 +495,80 @@ foreach $line (@all) {
 			$fixed=0;
             # policy merge
 			if (!defined $options{n}) {
-                print "\n\nstart\n";
-                print "rb src is \n";
-                #print Dumper(\%rbsrc);
-                print "rb dst is \n";
-                #print Dumper(\%rbdst);
 				foreach $rb (@{$rbsrc{$srcip}}) {
-                    print "enter 1\n";
-                    print $line . "\n";
 					if ($fixed) { last; }
 					if ($rb->{FZONE} eq $fzone && $rb->{TZONE} eq $tozone) {
-                        print "enter 2\n";
-                        print "newsvc is $newsvc\n";
-                        print "srcip is $srcip\tdstip is $dstip\taction is $action\n";
-                        print "rb->{SRC} is $rb->{SRC}\trb->{DST} is $rb->{DST}\trb->{ACT} is $rb->{ACT}\n";
+                        #if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $rb->{SRV} eq $newsvc) { last; }
 						if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $newsvc ne "any") {
-                            print "enter src\n";
 							print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if !defined $options{j};
-							print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
+							print compare $rb->{POLICY} . "," . $line . ",$rb->{POLICY},set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
 							print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tapplication $newsvc;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
 							print rtables "$pre$rb->{POLICY},,,,,$newsvc\n" if defined $options{c};
 							$fixed=1;
 							$total++;
+				            $rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$rb->{POLICY}, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
+				            push (@{$rbsrc{$rule->{SRC}}}, $rule);
+				            push (@{$rbdst{$rule->{DST}}}, $rule);
 						} elsif (!defined $options{s} && $rb->{SRC} eq $srcip && $rb->{SVC} eq $newsvc && $rb->{ACT} eq $action) {
-                            print "enter 3\n";
 							print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if !defined $options{j};
-							print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if (!defined $options{j} && defined $options{c});
+							print compare $rb->{POLICY} . "," . $line . ",$rb->{POLICY},set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if (!defined $options{j} && defined $options{c});
 							print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tdestination-address $dstip;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
 							print rtables "$pre$rb->{POLICY},,,,$dstip,\n" if defined $options{c};
 							$fixed=1;
 							$total++;
+				            $rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$rb->{POLICY}, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
+				            push (@{$rbsrc{$rule->{SRC}}}, $rule);
+				            push (@{$rbdst{$rule->{DST}}}, $rule);
 						}
 					}
 				}
 				if (!$fixed) {
-                    print "enter 4\n";
 					foreach $rb (@{$rbdst{$dstip}}) {
-                        print "enter foreach\n";
                         if ($fixed) { last; }
 						if ($rb->{FZONE} eq $fzone && $rb->{TZONE} eq $tozone) {
-                            print "enter fzone\n";
+                            #if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $rb->{SRV} eq $newsvc) { last; }
 							if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $newsvc ne "any" && $newsvc ne $rb->{SVC}) {
-                                print "enter 6\n";
 								print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if !defined $options{j};
-								print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
+								print compare "$rb->{POLICY}," . $line . ",$rb->{POLICY},set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
 								print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tapplication $newsvc;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
 								print rtables "$pre$rb->{POLICY},,,,,$newsvc\n" if defined $options{c};
 								$fixed=1;
 								$total++;						
+				                $rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$rb->{POLICY}, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
+				                push (@{$rbsrc{$rule->{SRC}}}, $rule);
+				                push (@{$rbdst{$rule->{DST}}}, $rule);
 							} elsif (!defined $options{s} && $rb->{DST} eq $dstip && $rb->{SVC} eq $newsvc && $rb->{ACT} eq $action) {
-                                print "enter 7\n";
 								print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match source-address $srcip\n" if !defined $options{j};
-								print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match source-address $srcip\n" if (!defined $options{j} && defined $options{c});
+								print compare "$rb->{POLICY}," . $line . ",$rb->{POLICY},set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match source-address $srcip\n" if (!defined $options{j} && defined $options{c});
 								print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tsource-address $srcip;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
 								print rtables "$pre$rb->{POLICY},,$srcip,,,\n" if defined $options{c};
 								$fixed=1;
 								$total++;
+				                $rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$rb->{POLICY}, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
+				                push (@{$rbsrc{$rule->{SRC}}}, $rule);
+				                push (@{$rbdst{$rule->{DST}}}, $rule);
 							}
 						}
 					}
 				}
 			}
 			if (!$fixed) {
-                print "enter 5\n";
 				print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$policy match source-address $srcip destination-address $dstip application $newsvc\n" if !defined $options{j};
-				print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$policy match source-address $srcip destination-address $dstip application $newsvc\n" if ( !defined $options{j} && defined $options{c});
+				print compare "$policy," . $line . ",$policy,set security policies from-zone $fzone to-zone $tozone policy $pre$policy match source-address $srcip destination-address $dstip application $newsvc\n" if ( !defined $options{j} && defined $options{c});
 				print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$policy then $action\n" if !defined $options{j};
-				print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$policy then $action\n" if ( !defined $options{j} && defined $options{c});
+				print compare "$policy," . $line . ",$policy,set security policies from-zone $fzone to-zone $tozone policy $pre$policy then $action\n" if ( !defined $options{j} && defined $options{c});
 				print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$policy {\n\t\t\t\tmatch {\n\t\t\t\t\tsource-address $srcip;\n" if defined $options{j};
 				print rules "\t\t\t\t\tdestination-address $dstip;\n\t\t\t\t\tapplication $newsvc;\n\t\t\t\t}\n\t\t\t\tthen {\n\t\t\t\t\t$action;\n" if defined $options{j};
 				print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$policy then log session-close\n" if ($acl[$i] eq "log" && !defined $options{j});
-				print compare $line . ",set security policies from-zone $fzone to-zone $tozone policy $pre$policy then log session-close\n" if ($acl[$i] eq "log" && !defined $options{j} && defined $options{c});
+				print compare "$policy," . $line . ",$policy,set security policies from-zone $fzone to-zone $tozone policy $pre$policy then log session-close\n" if ($acl[$i] eq "log" && !defined $options{j} && defined $options{c});
 				print rules "\t\t\t\t\tlog {\n\t\t\t\t\t\tsession-close;\n\t\t\t\t\t}\n" if ($acl[$i] eq "log" && defined $options{j});
 				print rules "\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
 				print rtables "$pre$policy,$fzone,$srcip,$tozone,$dstip,$newsvc\n" if defined $options{c};
+
 				$rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$policy++, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
 				push (@{$rbsrc{$rule->{SRC}}}, $rule);
 				push (@{$rbdst{$rule->{DST}}}, $rule);
-                print "end\n";
-			}
+			} 
 		}
 	}
 }
@@ -651,7 +654,7 @@ sub writeaddress {
 
 	if (!defined $options{j}) {
 		print objs "set security zones security-zone $zone address-book address $hostname $ip\n" if !defined $options{g};
-		print compare $line . ",set security zones security-zone $zone address-book address $hostname $ip\n" if (!defined $options{g} && defined $options{c});
+		print compare "," . $line . ",,set security zones security-zone $zone address-book address $hostname $ip\n" if (!defined $options{g} && defined $options{c});
 		print objs "set security address-book global address $hostname $ip\n" if defined $options{g};
 	} else {
 		print objs "\t\tsecurity-zone $zone {\n\t\t\t\t\taddress-book {\n\t\t\t\t\t\taddress $hostname $ip;\n\t\t\t\t\t}\n\t\t}\n" if !defined $options{g};
@@ -665,7 +668,7 @@ sub writerangeaddress {
 
 	if (!defined $options{j}) {
 		print objs "set security zones security-zone $zone address-book address $hostname range-address $start_ip to $end_ip\n" if !defined $options{g};
-		print compare $line . ",set security zones security-zone $zone address-book address $hostname range-address $start_ip to $end_ip\n" if (!defined $options{g} && defined $options{c});
+		print compare "," . $line . ",,set security zones security-zone $zone address-book address $hostname range-address $start_ip to $end_ip\n" if (!defined $options{g} && defined $options{c});
 		print objs "set security address-book global address $hostname range-address $start_ip to $end_ip\n" if defined $options{g};
 	} else {
 		print objs "\t\tsecurity-zone $zone {\n\t\t\t\t\taddress-book {\n\t\t\t\t\t\taddress $hostname $ip;\n\t\t\t\t\t}\n\t\t}\n" if !defined $options{g};
