@@ -498,7 +498,7 @@ foreach $line (@all) {
 				foreach $rb (@{$rbsrc{$srcip}}) {
 					if ($fixed) { last; }
 					if ($rb->{FZONE} eq $fzone && $rb->{TZONE} eq $tozone) {
-                        #if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $rb->{SRV} eq $newsvc) { last; }
+                        # merge for same source and destination address, different application
 						if ($rb->{SRC} eq $srcip && $rb->{DST} eq $dstip && $rb->{ACT} eq $action && $newsvc ne "any") {
 							print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if !defined $options{j};
 							print compare $rb->{POLICY} . "," . $line . ",$rb->{POLICY},set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match application $newsvc\n" if (!defined $options{j} && defined $options{c});
@@ -506,10 +506,19 @@ foreach $line (@all) {
 							print rtables "$pre$rb->{POLICY},,,,,$newsvc\n" if defined $options{c};
 							$fixed=1;
 							$total++;
-				            $rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$rb->{POLICY}, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
-				            push (@{$rbsrc{$rule->{SRC}}}, $rule);
-				            push (@{$rbdst{$rule->{DST}}}, $rule);
+                            print Dumper($rb);
+                            print "rbsrc SVC is $rb->{SVC}\n";
+                            #print Dumper(\%rbsrc);
+                            if (!grep /^$newsvc$/, $rb->{SVC}) { 
+                                print "enter if\n";
+                                push @rb->{SVC}, $newsvc; 
+                                print "new @{$rbsrc{$rule->{SVC}}}\n"; 
+                            }
+                            #$rule={ FZONE=>$fzone, TZONE=>$tozone, POLICY=>$rb->{POLICY}, SRC=>$srcip, DST=>$dstip, SVC=>$newsvc, ACT=>$action };
+                            #push (@{$rbsrc{$rule->{SRC}}}, $rule);
+                            #push (@{$rbdst{$rule->{DST}}}, $rule);
 						} elsif (!defined $options{s} && $rb->{SRC} eq $srcip && $rb->{SVC} eq $newsvc && $rb->{ACT} eq $action) {
+                        # merge for same source and application, different destination address 
 							print rules "set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if !defined $options{j};
 							print compare $rb->{POLICY} . "," . $line . ",$rb->{POLICY},set security policies from-zone $fzone to-zone $tozone policy $pre$rb->{POLICY} match destination-address $dstip\n" if (!defined $options{j} && defined $options{c});
 							print rules "\t\tfrom-zone $fzone to-zone $tozone {\n\t\t\tpolicy $pre$rb->{POLICY} {\n\t\t\t\tmatch {\n\t\t\t\t\tdestination-address $dstip;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n" if defined $options{j};
