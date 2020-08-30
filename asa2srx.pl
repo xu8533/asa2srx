@@ -410,7 +410,7 @@ foreach $line (@all) {
 				}
                 #if (!exists $newapp{$protocol}{$acl[$j]}) {
 			    if (!exists $newapp{$protocol}{$dstport}) { #fix service port, like 1435-1600
-			        $newapp{$protocol}{$dstport}=$svcname;
+			        $newapp{$protocol}{$dstport}=$svcname; #use dstport instead of $acl[$j]
 				    if ($protocol eq "tcp-udp") {
 					    print ports "set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if !defined $options{j};
 					    print compare ", $line ,,set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
