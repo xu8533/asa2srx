@@ -408,8 +408,9 @@ foreach $line (@all) {
 			        when ("tcp") { $svcname="TCP_" . $dstport; }
 				    when ("tcp-udp") { $svcname="TCP_UDP_" . $dstport; }
 				}
-			    if (!exists $newapp{$protocol}{$acl[$j]}) {
-			        $newapp{$protocol}{$acl[$j]}=$svcname;
+                #if (!exists $newapp{$protocol}{$acl[$j]}) {
+			    if (!exists $newapp{$protocol}{$dstport}) { #fix service port, like 1435-1600
+			        $newapp{$protocol}{$dstport}=$svcname;
 				    if ($protocol eq "tcp-udp") {
 					    print ports "set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if !defined $options{j};
 					    print compare ", $line ,,set applications application $svcname term t1 protocol tcp destination-port $dstport\n" if (!defined $options{j} && defined $options{c});
@@ -444,8 +445,8 @@ foreach $line (@all) {
 			$next=$acl[$i];
 			if ($next ne "" && $next ne "log" ) {
 				($i, $port)=setaddress($i, @acl);
-				if (exists $service{$acl[$j]}{"$port"}) { $newsvc=$service{$acl[$j]}{$port}; }
-				elsif (exists $newapp{$acl[$j]}{"$port"}) { $newsvc=$newapp{$acl[$j]}{$port}; }
+				if (exists $service{$acl[$j]}{"$port"}) { $newsvc=$service{$acl[$j]}{"$port"}; }
+				elsif (exists $newapp{$acl[$j]}{"$port"}) { $newsvc=$newapp{$acl[$j]}{"$port"}; }
 				elsif (exists $group{"$port"}) { $newsvc=$port; }
 			}	else {
 				given ($acl[$j]) {
@@ -464,7 +465,7 @@ foreach $line (@all) {
                 else {
 				    if ($acl[$j] eq "udp") { $newsvc="UDP_" . $port; } 
                     else {$newsvc="TCP_Port_" . $port; }
-				    $newapp{$acl[$j]}{$port}=$newsvc;
+				    $newapp{$acl[$j]}{"$port"}=$newsvc;
 				    print ports "set applications application $newsvc protocol $acl[$j] destination-port $port\n" if !defined $options{j};
 				    print compare ", $line ,,set applications application $newsvc protocol $acl[$j] destination-port $port\n" if (!defined $options{j} && defined $options{c});
 			        print ports "\tapplication $newsvc {\n\t\tprotocol $acl[$j];\n\t\tdestination-port $port;\n\t}\n" if defined $options{j};
